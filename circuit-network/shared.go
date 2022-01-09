@@ -1,6 +1,8 @@
 package circuitnetwork
 
-import "time"
+import (
+	"time"
+)
 
 const MagicSleepTick int8 = 60
 
@@ -19,7 +21,14 @@ func SetTickTime(t time.Duration) {
 
 type Signal struct {
 	Name  string
-	Value int
+	Value int64
+}
+
+func (s *Signal) CopySignal() *Signal {
+	return &Signal{
+		Name:  s.Name,
+		Value: s.Value,
+	}
 }
 
 //type MathematicalOperation int

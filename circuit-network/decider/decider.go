@@ -12,38 +12,59 @@ import (
 //Decider ...
 type Decider struct {
 	sync.Mutex
-	Ticker            int8 //59 ticks and 1 sleep
 	ID                uuid.UUID
-	InFirst, InSecond chan int64
-	Out               chan int64
+	OutName           string
+	InFirst, InSecond chan circuitNetwork.Signal
+	Out               chan circuitNetwork.Signal
 	LogicalOperation  circuitNetwork.LogicalOperation
 	OutputType        circuitNetwork.CompareType
 }
 
-//Decide ...
-func (d *Decider) Decide() {
-	d.Lock()
-	defer d.Unlock()
-	d.Ticker++
-	if d.Ticker == circuitNetwork.MagicSleepTick {
-		d.Ticker = 0
+//NewDecider ...
+func NewDecider(
+	outName string,
+	inFirst, inSecond chan circuitNetwork.Signal,
+	logicalOperation circuitNetwork.LogicalOperation,
+	outputType circuitNetwork.CompareType,
+) *Decider {
+	return &Decider{
+		ID:               uuid.New(),
+		OutName:          outName,
+		InFirst:          inFirst,
+		InSecond:         inSecond,
+		Out:              make(chan circuitNetwork.Signal, 3),
+		LogicalOperation: logicalOperation,
+		OutputType:       outputType,
+	}
+}
+
+func (d *Decider) Work() {
+	for {
+		d.decide()
 		time.Sleep(circuitNetwork.TickTime)
 	}
+}
+
+func (d *Decider) decide() {
+	d.Lock()
+	defer d.Unlock()
 	f := <-d.InFirst
 	s := <-d.InSecond
-	loResult := d.LogicalOperation(f, s)
+	//TODO: debug log names?
+	loResult := d.LogicalOperation(f.Value, s.Value)
 	switch d.OutputType {
 	case circuitNetwork.BoolCompareType:
-		d.Out <- formIntOutput(loResult)
+		d.Out <- formOutputFromBool(loResult, d.OutName)
 	default:
 		log.Fatalf("decider %v got unknown output form type %v",
 			d.ID, d.OutputType)
 	}
 }
 
-func formIntOutput(compareResult bool) (out int64) {
+func formOutputFromBool(compareResult bool, outName string) (out circuitNetwork.Signal) {
+	out.Name = outName
 	if compareResult {
-		out = 1
+		out.Value = 1
 	}
 	return out
 }
