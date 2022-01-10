@@ -62,17 +62,30 @@ func (a *Accumulator) discharging() (isPowerLow bool) {
 		a.Charge -= output
 	}
 
-	if isPowerLow {
-		for connection := range a.Connections {
-			powerChangeForConnections(connection, isPowerLow)
-		}
-	}
+	//FIXME: somehow rework
+	//if isPowerLow {
+	//	for connection := range a.Connections {
+	//		powerChangeForConnections(connection, isPowerLow)
+	//	}
+	//}
 	return isPowerLow
 }
 
-func powerChangeForConnections(connection interface{}, isPowerLow bool) {
+//FIXME need idea how to send energy, need some feedback from connections
+func (a *Accumulator) sendPowerToConnections(connection interface{}, isPowerLow bool) {
 	switch connect := connection.(type) {
 	case *defense.LaserTurret:
+		if connect.IsOn {
+			if connect.IsFire {
+				if a.Charge >= defense.FireDrain {
+					a.Charge -= defense.FireDrain
+				} else {
+					connect.IsOn = false
+					a.Charge = 0
+				}
+				return
+			}
+		}
 		connect.EnableOrDisable(!isPowerLow)
 	default:
 		log.Fatalf("powerChangeForConnections unsupported type %T", connect)

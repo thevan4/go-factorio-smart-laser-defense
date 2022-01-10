@@ -2,7 +2,6 @@ package constant
 
 import (
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	circuitNetwork "github.com/thevan4/go-factorio-smart-laser-defense/circuit-network"
@@ -11,30 +10,38 @@ import (
 //Constant ...
 type Constant struct {
 	sync.Mutex
-	ID     uuid.UUID
-	Signal circuitNetwork.Signal
-	Out    chan circuitNetwork.Signal
+	GlobalTicker chan *sync.WaitGroup
+	ID           uuid.UUID
+	Signal       circuitNetwork.Signal
+	Out          []chan circuitNetwork.Signal
 }
 
 //NewConstant ...
-func NewConstant(signal circuitNetwork.Signal) *Constant {
+func NewConstant(
+	globalTicker chan *sync.WaitGroup,
+	signal circuitNetwork.Signal,
+	out []chan circuitNetwork.Signal) *Constant {
 	return &Constant{
-		ID:     uuid.New(),
-		Signal: signal,
-		Out:    make(chan circuitNetwork.Signal, 3),
+		GlobalTicker: globalTicker,
+		ID:           uuid.New(),
+		Signal:       signal,
+		Out:          out,
 	}
 }
 
 //Work ...
 func (c *Constant) Work() {
 	for {
+		t := <-c.GlobalTicker
+		t.Done()
+		c.Lock()
 		c.sendSignal()
-		time.Sleep(circuitNetwork.TickTime)
+		c.Unlock()
 	}
 }
 
 func (c *Constant) sendSignal() {
-	c.Lock()
-	defer c.Unlock()
-	c.Out <- c.Signal
+	for _, o := range c.Out {
+		o <- c.Signal
+	}
 }

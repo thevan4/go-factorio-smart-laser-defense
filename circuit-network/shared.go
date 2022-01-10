@@ -24,11 +24,20 @@ type Signal struct {
 	Value int64
 }
 
+type EnergyWire struct {
+	Charge uint16
+}
+
 func (s *Signal) CopySignal() *Signal {
 	return &Signal{
 		Name:  s.Name,
 		Value: s.Value,
 	}
+}
+
+//NewDefaultSignalChan ...
+func NewDefaultSignalChan() chan Signal {
+	return make(chan Signal, 3)
 }
 
 //type MathematicalOperation int

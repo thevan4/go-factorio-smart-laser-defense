@@ -3,36 +3,44 @@ package decider
 import (
 	"log"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	circuitNetwork "github.com/thevan4/go-factorio-smart-laser-defense/circuit-network"
 )
 
+const energyCost = 1 //kW
+
 //Decider ...
 type Decider struct {
 	sync.Mutex
-	ID                uuid.UUID
-	OutName           string
-	InFirst, InSecond chan circuitNetwork.Signal
-	Out               chan circuitNetwork.Signal
-	LogicalOperation  circuitNetwork.LogicalOperation
-	OutputType        circuitNetwork.CompareType
+	ID                 uuid.UUID
+	GlobalTicker       chan *sync.WaitGroup
+	EnergyWire         chan circuitNetwork.EnergyWire
+	OutName            string
+	GreenWire, RedWire chan circuitNetwork.Signal
+	Out                []chan circuitNetwork.Signal
+	LogicalOperation   circuitNetwork.LogicalOperation
+	OutputType         circuitNetwork.CompareType
 }
 
 //NewDecider ...
 func NewDecider(
+	globalTicker chan *sync.WaitGroup,
+	energyWire chan circuitNetwork.EnergyWire,
 	outName string,
-	inFirst, inSecond chan circuitNetwork.Signal,
+	greenWire, redWire chan circuitNetwork.Signal,
+	out []chan circuitNetwork.Signal,
 	logicalOperation circuitNetwork.LogicalOperation,
 	outputType circuitNetwork.CompareType,
 ) *Decider {
 	return &Decider{
 		ID:               uuid.New(),
+		GlobalTicker:     globalTicker,
+		EnergyWire:       energyWire,
 		OutName:          outName,
-		InFirst:          inFirst,
-		InSecond:         inSecond,
-		Out:              make(chan circuitNetwork.Signal, 3),
+		GreenWire:        greenWire,
+		RedWire:          redWire,
+		Out:              out,
 		LogicalOperation: logicalOperation,
 		OutputType:       outputType,
 	}
@@ -40,21 +48,26 @@ func NewDecider(
 
 func (d *Decider) Work() {
 	for {
+		t := <-d.GlobalTicker
+		t.Done()
+
+		d.Lock()
 		d.decide()
-		time.Sleep(circuitNetwork.TickTime)
+		d.Unlock()
 	}
 }
 
 func (d *Decider) decide() {
-	d.Lock()
-	defer d.Unlock()
-	f := <-d.InFirst
-	s := <-d.InSecond
+	g := <-d.GreenWire
+	r := <-d.RedWire
 	//TODO: debug log names?
-	loResult := d.LogicalOperation(f.Value, s.Value)
+	loResult := d.LogicalOperation(g.Value, r.Value)
 	switch d.OutputType {
 	case circuitNetwork.BoolCompareType:
-		d.Out <- formOutputFromBool(loResult, d.OutName)
+		result := formOutputFromBool(loResult, d.OutName)
+		for _, o := range d.Out {
+			o <- result
+		}
 	default:
 		log.Fatalf("decider %v got unknown output form type %v",
 			d.ID, d.OutputType)
